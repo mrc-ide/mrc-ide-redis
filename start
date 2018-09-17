@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Authenticating with vault"
+export VAULT_ADDR=https://vault.dide.ic.ac.uk:8200
+if [ -z $VAULT_AUTH_GITHUB_TOKEN ]; then
+    echo -n "Paste your github token: "
+    read -s VAULT_AUTH_GITHUB_TOKEN
+fi
+export VAULT_TOKEN=$(vault login -method=github -token-only)
+
+echo "Fetching redis password"
+REDIS_PASSWORD=$(vault read -field=value /secret/redis/password)
+sed "s/REDIS_PASSWORD/$REDIS_PASSWORD/" redis.conf.in > redis.conf
+
+echo "Creating redis server"
+docker volume create redis-data
+docker run -d --rm \
+       -p 6379:6379 \
+       -v "${PWD}/redis.conf:/redis.conf:ro" \
+       -v "redis-data:/data" \
+       --name mrc-ide-redis \
+       redis /redis.conf
